@@ -39,16 +39,42 @@ const VIDEO_PROMPT_TEMPLATE = (metadata: VideoMetadata) => `
 // --- Script Analysis Prompts ---
 
 const SYSTEM_INSTRUCTION = `
-Role: 你是辅助编剧与导演的 AI 剧本工程专家。
-Mode: 工具箱模式 (Modular Toolbox)。你拥有四个独立的高级分析模块。
-Task: 用户会上传剧本，然后会随机调用你的某一个能力模块。
-Guidelines:
-1. **独立性**：每次请求只专注于当前模块的任务，不要混杂其他模块的信息（除非必要）。
-2. **精准度**：利用深度思维（Deep Thinking）挖掘剧本字面背后的逻辑。
-3. **格式化**：输出内容必须是结构化的 Markdown 表格，方便工业化生产使用。
-4. **统一美术风格 (Visual Consistency)**：你必须严格遵循确定的“Visual Style”来生成所有图片提示词 (Prompts)。确保角色、道具、场景在视觉风格上高度统一。
-5. **严苛自查 (Strict Self-Verification)**：在输出结果前，必须对比原始剧本进行“逐行核对”。
+Role: 你是 Studio Architect 2.0.0 —— 全流程 AI 影视制片架构师。
+Mode: 工业化创意管家。你负责将艺术感性拆解为可量化、可追溯、可迭代的标准工程指令。
+Core Discipline:
+1. **沙盒原则 (Sandboxing)**：模块绝对解耦。严禁跨模块执行任务。
+2. **绝对忠实剧本**：严禁脑补情节、对话。所有输出必须字斟句酌地基于剧本。
+3. **视觉连续性**：对人物、场景、光色的一致性保持近乎偏执的要求。
+4. **格式化**：所有输出必须是结构化的 Markdown 表格，方便工业化生产使用。
+5. **严苛自查**：在输出结果前，必须对比原始剧本进行“逐行核对”。
 `;
+
+const ARCHITECT_PROMPTS: Record<number, (visualStyle?: string) => string> = {
+  1: (style) => `
+**【指令调用：/breakdown 剧情锚点工程】**
+**任务**：深度扫描剧本，精准提取 9 个关键剧情锚点，确立戏剧架构。
+**执行标准**：覆盖开场、矛盾点、升级点、反转点及收尾。确保戏剧张力与结构合理。
+**输出**：Markdown 表格包含 | 锚点编号 | 戏剧功能 | 剧情核心实录 | 冲突等级 (1-10) | 核心台词/金句 |
+`,
+  2: (style) => `
+**【指令调用：/beatboard 视觉 DNA 锁定】**
+**任务**：基于阶段 1 的锚点，生成“九宫格”视觉关键帧提示词。
+**核心约束**：锁定视觉风格为【${style || 'Cinematic Realism'}】。统一光影、色调及构图范式。
+**输出**：Markdown 表格包含 | 锚点 | 核心视觉 DNA (光色/构图) | 画面内容描述 | 工业级图片提示词 (Prompt) |
+`,
+  3: (style) => `
+**【指令调用：/sequence 镜头序列展开】**
+**任务**：将九宫格视觉关键帧展开为四宫格镜头序列。
+**核心约束**：必须严格继承阶段 2 的视觉描述，确保人物与环境在镜头间不发生跳变，维持视觉连续性。
+**输出**：Markdown 表格包含 | 场次 | 镜号 | 景别/运镜 | 视觉衔接逻辑 | 画面内容实录 | 精准提示词 (Visual Consistency Prompt) |
+`,
+  4: (style) => `
+**【指令调用：/motion 动态指令生成】**
+**任务**：为阶段 3 的镜头序列生成动态视频指令。
+**核心约束**：聚焦物理合理性与镜头运动精度（Pan/Tilt/Zoom）。
+**输出**：Markdown 表格包含 | 镜号 | 动态描述 | 运动矢量建议 (Motion Vector) | 视频模型专用指令 (Motion Prompt) | 物理一致性自查 |
+`
+};
 
 const STEPS_PROMPTS: Record<string, (context?: any, visualStyle?: string, storyboardContext?: string) => string> = {
   ROLES: (ctx, visualStyle) => `
@@ -99,43 +125,33 @@ ${storyboardContext ? `**[参考数据：已生成的分镜表]**\n${storyboardC
 
 **🎨 全局美术风格约束**：基于 **【 ${visualStyle || 'Cinematic Realism'} 】**。
 
-**📌 核心任务参数：**
-- **范围**：第 ${ctx?.startEpisode || 1} 集 至 第 ${(ctx?.startEpisode || 1) + (ctx?.episodeCount || 1) - 1} 集。
-- **时长**：单集约 ${ctx?.duration || '60s'}。
-- **镜头数**：单集约 ${ctx?.shotCount || '15-25'} 镜。
+**📌 核心考核指标 (必须严格达标)：**
+1. **镜头数量**：本集必须拆解出 **${ctx?.shotCount || '15-25'}** 个镜头。如果剧本较短，请通过拆解动作细节（Detail Shots）来达标，**严禁少于最小值**。
+2. **总时长**：本集总时长必须控制在 **${ctx?.duration || '60s'}** 左右 (误差 ±10s)。
+3. **范围**：第 ${ctx?.startEpisode || 1} 集 至 第 ${(ctx?.startEpisode || 1) + (ctx?.episodeCount || 1) - 1} 集。
 
-**🎬 视听语言高级衔接规范 (Cinematic Transition Rules):**
-在拆解时，你必须根据剧情情绪，在【导演意图】和【画面描述】中体现以下专业衔接逻辑：
+**🧠 导演思维与画面逻辑 (Director's Logic & Timing):**
+1. **轴线与空间逻辑 (180° Rule & Continuity)**:
+   - **严禁越轴**: 始终在 180 度轴线的一侧拍摄。
+   - **对话衔接**: 严禁连续两个同侧单人镜头直接组接（避免 Jump Cut）。必须通过过肩镜头（OTS）、双人镜头（Two Shot）或反应镜头（Reaction）来建立空间关系。
+   - **视线引导 (Eyeline Match)**: 确保上下镜头的视线方向闭环（如：上一镜A向右看 -> 下一镜B在画左向左看）。
+2. **时长精准估算 (Precise Timing)**:
+   - **台词驱动时长**: **公式：(中文字数 / 3.5) + 0.5秒**。例如：15字台词镜头至少需 4-5 秒；3字短句约 1.5 秒。
+   - **动作驱动时长**: 连贯打斗、复杂调度或情绪反应镜头，必须在物理动作时间基础上增加 1-3 秒的视觉停留余量，确保动作看清且有力度。
+3. **镜头组接美学**:
+   - 避免两个孤立的单边镜头生硬组接。
+   - 灵活使用 **[逻辑递进]** (全->中->近) 或 **[情绪冲击]** (特写跳切)。
 
-1. **逻辑递进式 (WS → MS → CU)**: 
-   - *逻辑*：先看全貌，再看动作，最后看细节。
-   - *应用*：平稳引入新环境或新人物，建立观众的地理空间感。
-2. **情绪冲击式 (WS → ECU/CU)**: 
-   - *逻辑*：从极远直接跳切到极近。
-   - *应用*：制造“视觉钩子”或心理重音。用于反转、受惊、发现秘密的瞬间，产生强烈的冲击力。
-3. **主观视点式 (WS → POV)**: 
-   - *逻辑*：先展示角色在看，随后展示角色眼中的画面。
-   - *应用*：增强代入感。展示主角发现的重要线索、系统面板或心仪对象。
-4. **关系对峙式 (WS → OTS/POV)**: 
-   - *逻辑*：利用过肩镜头 (Over-the-Shoulder) 建立两人对立的空间。
-   - *应用*：谈判、争执或战斗前奏，通过构图体现权力等级或压迫感。
-5. **运动匹配 (Match Cut)**: 
-   - *逻辑*：上一镜头的运动趋势延续到下一镜头。
-   - *应用*：让剪辑变得流畅隐形，或在时空跳转时制造奇幻感。
-
-**🚀 执行要求：**
-- **严禁跳步**：动作必须细化（如：不能一镜完成“进屋并坐下”，应拆为“全景进屋”+“中景坐下”）。
-- **时间码连续**：上一镜结束时间 = 下一镜开始时间。
-- **关键帧提示词**：严格使用 \`<场景视角：人物动作：道具与关系>\` 格式。
+**🚫 严格约束：**
+1. **分镜逻辑服务剧情**：所有镜头必须是剧本中隐含的细节（如：手部特写、眼神特写、环境空镜烘托），**严禁凭空捏造无关剧情的内容**。
+2. **时间码连续**：上一镜结束时间 = 下一镜开始时间 (如 00:00-00:04, 00:04-00:07)。
 
 **输出格式：**
 *(按集数分别列出，例如：### 第 ${ctx?.startEpisode || 1} 集 分镜表)*
 
-| 场次 | 镜号 | 分镜时间段 | 景别/运镜 | 画面内容描述 | 台词 | 关键帧图片提示词 (Fusion Prompt) | 音效 (SFX) | 背景音乐 (BGM) | 导演意图 |
+| 场次 | 镜号 | 分镜时间段 | 景别/运镜 | 画面内容描述 | 台词 | 关键帧图片提示词 (Fusion Prompt) | 音效 (SFX) | 背景音乐 (BGM) | 导演意图 (标注衔接逻辑) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 1 | 1 | 00:00-00:04 | 远景/固定 | (建立镜头) 灰暗的审讯室全景，只有一束顶光打在中间。 | (心跳声) | <Wide shot, dim interrogation room, overhead spotlight: No character: Heavy metal door, concrete walls> | 开门声, 重物摩擦 | 压抑的低频氛围音 | **(逻辑递进)** 建立压抑的空间基调，准备引入人物 |
-| 1 | 2 | 00:04-00:07 | 特写/快切 | **(情绪冲击)** 男主瞳孔骤然收缩，额头布满冷汗。 | 男主：(急促呼吸) | <Extreme close up, high contrast: Young man's eyes trembling with sweat: Sweaty brow, iris detail> | 刺耳的电流声 | 节奏突然停止 | **(情绪冲击)** 通过景别剧变制造“心理重音”，展现男主极度恐惧 |
-| 1 | 3 | 00:07-00:10 | 俯视POV | **(主观视点)** 男主视角：桌上一张泛黄的旧照片，上面的人脸被抠掉了。 | 无 | <Top down POV view, table surface: No character: Yellowed photo with cut-out face, dusty table> | 纸张摩擦声 | 悬疑弦乐进场 | **(主观视点)** 引导观众进入男主视角，锁定关键线索 |
 `
 };
 
@@ -210,7 +226,26 @@ export const generateScriptStep = async (
 ): Promise<string> => {
   let prompt = "";
   if (refinementInstruction) {
-     prompt = `根据用户要求调整：${refinementInstruction}。保持风格为【${visualStyle}】。输出完整Markdown表格。`;
+     const moduleNames: Record<string, string> = {
+         'ROLES': '人物小传',
+         'PROPS': '道具清单',
+         'SCENES': '场景氛围',
+         'STORYBOARD': '分镜拆解',
+         'ARCHITECT_PHASE1': '剧情锚点提取',
+         'ARCHITECT_PHASE2': '视觉 DNA 锁定',
+         'ARCHITECT_PHASE3': '镜头序列展开',
+         'ARCHITECT_PHASE4': '动态指令生成'
+     };
+     const currentModule = moduleNames[step] || step;
+     prompt = `
+**【当前指令：${currentModule} - 导演修正循环】**
+用户指令："${refinementInstruction}"
+**🚨 强制拒绝逻辑**: 如果指令要求执行**不属于**【${currentModule}】的任务，必须立即拒绝并说明原因。
+**输出**: 修正后的完整 Markdown 结构。
+`;
+  } else if (step.startsWith('ARCHITECT_PHASE')) {
+      const phaseNum = parseInt(step.replace('ARCHITECT_PHASE', ''));
+      prompt = ARCHITECT_PROMPTS[phaseNum](visualStyle);
   } else {
     if (STEPS_PROMPTS[step]) {
         prompt = STEPS_PROMPTS[step](context, visualStyle, storyboardContext);
@@ -231,7 +266,7 @@ export const optimizeScriptTable = async (
   userInput: string,
   visualStyle: string | null
 ): Promise<string> => {
-  const prompt = `优化 ${tableType} 表格。参考剧本上下文，补全细节、视听衔接逻辑和 AI 绘图提示词。风格：${visualStyle || '自动分析'}。输入内容如下：\n${userInput}`;
+  const prompt = `优化 ${tableType} 表格。参考剧本上下文，补全细节、视听衔接逻辑和 AI 绘图提示词。风格：${visualStyle || '自动分析'}。输入内容如下：\n${userInput}\n\n⚠️ 注意：严禁脑补，严禁跨越模块边界。`;
   try {
     const response = await chat.sendMessage({ message: prompt });
     return response.text || "优化失败。";
