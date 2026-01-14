@@ -1,0 +1,8 @@
+{
+  "name": "视频拉片分析助手 (Pro Video Analyst)",
+  "description": "专业的短视频分析工具，采用‘五步拉片法’，对短视频进行深度拆解，生成包含节秦感受、分镜表、叙事结构及关键细节的详尽报告。",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
