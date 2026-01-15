@@ -575,14 +575,15 @@ const App: React.FC = () => {
   };
 
   const handleCopyFullReport = async () => {
-    const sections = ['ROLES', 'PROPS', 'SCENES', 'STORYBOARD'];
+    // UPDATED: Include VIDEO_PROMPTS
+    const sections = ['ROLES', 'PROPS', 'SCENES', 'STORYBOARD', 'VIDEO_PROMPTS'];
     let fullHtml = '<html><head><meta charset="UTF-8"></head><body>';
     let fullText = '';
     
     sections.forEach(section => {
         const md = scriptState.stepResults[section];
         if (!md) return;
-        const titles: Record<string, string> = { 'ROLES': '角色深度分析', 'PROPS': '道具清单', 'SCENES': '场景美术分析', 'STORYBOARD': '分镜表' };
+        const titles: Record<string, string> = { 'ROLES': '角色深度分析', 'PROPS': '道具清单', 'SCENES': '场景美术分析', 'STORYBOARD': '分镜表', 'VIDEO_PROMPTS': '视频生成提示词' };
         fullHtml += `<h1>${titles[section] || section}</h1>`;
         fullText += `\n\n# ${titles[section] || section}\n\n`;
 
@@ -983,7 +984,7 @@ const App: React.FC = () => {
                                   <i className="fas fa-table text-4xl mb-4 opacity-30"></i>
                                   <p className="text-sm">等待优化结果...</p>
                                   <p className="text-xs mt-2 opacity-60">请先在“剧本拆解”中上传剧本以提供上下文。</p>
-                               </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -1008,6 +1009,7 @@ const App: React.FC = () => {
                           <div className="flex flex-col gap-2">
                                {/* REORDERED: Storyboard first to encourage flow */}
                               {renderTabButton('STORYBOARD', '分镜拆解 (优先)', 'fa-film')}
+                              {renderTabButton('VIDEO_PROMPTS', '视频提示词', 'fa-video')}
                               {renderTabButton('SCENES', '场景拆解', 'fa-dungeon')}
                               {renderTabButton('ROLES', '人物拆解', 'fa-user-astronaut')}
                               {renderTabButton('PROPS', '道具拆解', 'fa-hat-wizard')}
@@ -1104,6 +1106,7 @@ const App: React.FC = () => {
                                   {scriptState.currentStep === 'PROPS' && <><i className="fas fa-hat-wizard text-indigo-500"></i> 道具与置景清单</>}
                                   {scriptState.currentStep === 'SCENES' && <><i className="fas fa-dungeon text-indigo-500"></i> 场景氛围构建</>}
                                   {scriptState.currentStep === 'STORYBOARD' && <><i className="fas fa-film text-indigo-500"></i> 工业级分镜表</>}
+                                  {scriptState.currentStep === 'VIDEO_PROMPTS' && <><i className="fas fa-video text-indigo-500"></i> 视频生成提示词</>}
                                   {scriptState.currentStep === 'COMPLETED' && <><i className="fas fa-check-circle text-emerald-500"></i> 剧本拆解总览</>}
                                   {scriptState.currentStep === 'SUMMARY' && <><i className="fas fa-file-export text-indigo-500"></i> 汇总导出</>}
                                </h2>
@@ -1140,7 +1143,8 @@ const App: React.FC = () => {
                                       <i className={`fas ${
                                           scriptState.currentStep === 'ROLES' ? 'fa-users' : 
                                           scriptState.currentStep === 'PROPS' ? 'fa-box-open' :
-                                          scriptState.currentStep === 'SCENES' ? 'fa-image' : 'fa-video'
+                                          scriptState.currentStep === 'SCENES' ? 'fa-image' : 
+                                          scriptState.currentStep === 'VIDEO_PROMPTS' ? 'fa-video' : 'fa-film'
                                       } text-4xl`}></i>
                                   </div>
                                   <div className="text-center max-w-sm">
@@ -1162,15 +1166,23 @@ const App: React.FC = () => {
                                   <div className="markdown-content">
                                       {scriptState.currentStep === 'SUMMARY' ? (
                                           <div className="space-y-12">
-                                              {['STORYBOARD', 'SCENES', 'ROLES', 'PROPS'].map(step => (
+                                              {['STORYBOARD', 'VIDEO_PROMPTS', 'SCENES', 'ROLES', 'PROPS'].map(step => (
                                                   scriptState.stepResults[step] && (
                                                       <div key={step} className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                                                           <div className="mb-6 flex items-center gap-3 border-b border-slate-50 pb-4">
                                                               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                                                  <i className={`fas ${step === 'STORYBOARD' ? 'fa-film' : step === 'SCENES' ? 'fa-dungeon' : step === 'ROLES' ? 'fa-user-astronaut' : 'fa-hat-wizard'}`}></i>
+                                                                  <i className={`fas ${
+                                                                    step === 'STORYBOARD' ? 'fa-film' : 
+                                                                    step === 'VIDEO_PROMPTS' ? 'fa-video' :
+                                                                    step === 'SCENES' ? 'fa-dungeon' : 
+                                                                    step === 'ROLES' ? 'fa-user-astronaut' : 'fa-hat-wizard'
+                                                                  }`}></i>
                                                               </div>
                                                               <h3 className="text-xl font-bold text-slate-800 m-0 p-0">
-                                                                  {step === 'STORYBOARD' ? '分镜表' : step === 'SCENES' ? '场景分析' : step === 'ROLES' ? '角色设定' : '道具清单'}
+                                                                  {step === 'STORYBOARD' ? '分镜表' : 
+                                                                   step === 'VIDEO_PROMPTS' ? '视频生成提示词' :
+                                                                   step === 'SCENES' ? '场景分析' : 
+                                                                   step === 'ROLES' ? '角色设定' : '道具清单'}
                                                               </h3>
                                                           </div>
                                                           {renderMarkdown(scriptState.stepResults[step])}

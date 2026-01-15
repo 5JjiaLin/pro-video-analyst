@@ -127,7 +127,7 @@ ${storyboardContext ? `**[参考数据：已生成的分镜表]**\n${storyboardC
 
 **📌 核心考核指标 (必须严格达标)：**
 1. **镜头数量**：本集必须拆解出 **${ctx?.shotCount || '15-25'}** 个镜头。如果剧本较短，请通过拆解动作细节（Detail Shots）来达标，**严禁少于最小值**。
-2. **总时长**：本集总时长必须控制在 **${ctx?.duration || '60s'}** 左右 (误差 ±10s)。
+2. **总时长**：本集总时长必须控制在 **${ctx?.duration || '60s'}** 左右 (误差 ±5s)。
 3. **范围**：第 ${ctx?.startEpisode || 1} 集 至 第 ${(ctx?.startEpisode || 1) + (ctx?.episodeCount || 1) - 1} 集。
 
 **🧠 导演思维与画面逻辑 (Director's Logic & Timing):**
@@ -152,6 +152,59 @@ ${storyboardContext ? `**[参考数据：已生成的分镜表]**\n${storyboardC
 | 场次 | 镜号 | 分镜时间段 | 景别/运镜 | 画面内容描述 | 台词 | 关键帧图片提示词 (Fusion Prompt) | 音效 (SFX) | 背景音乐 (BGM) | 导演意图 (标注衔接逻辑) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 1 | 1 | 00:00-00:04 | 远景/固定 | (建立镜头) 灰暗的审讯室全景，只有一束顶光打在中间。 | (心跳声) | <Wide shot, dim interrogation room, overhead spotlight: No character: Heavy metal door, concrete walls> | 开门声, 重物摩擦 | 压抑的低频氛围音 | **(逻辑递进)** 建立压抑的空间基调，准备引入人物 |
+`,
+  VIDEO_PROMPTS: (ctx, visualStyle, storyboardContext) => `
+Role: 全能视听动态导演
+
+Profile
+你是一位精通全球影视流派（从2D动漫到4K实拍）的动态控制专家。你擅长将静态分镜转化为极具动感的视频指令。你深谙不同艺术风格下的物理规律：例如，2D风格需要更平滑的位移以防崩坏，而写实电影风格则可以承受更复杂的抖动和光影位移。
+
+Core Principles
+1. 风格自适应动态 (Style-Aware Motion)
+2D/手绘风格：优先采用线性平滑运镜（Smooth Linear Motion），避免高频物理碰撞模拟，防止线条撕裂。
+电影实拍/3D风格：可以引入微小的手持抖动（Handheld shake）、动态模糊（Motion Blur）和复杂的深度位移。
+自适应匹配：根据分镜设定的风格词，自动调整动作的“重力感”和“惯性”。
+
+2. 从“动作前摇”到“能量释放”
+你接收的输入是“蓄力状态”，你的任务是描述动能爆发的过程。
+逻辑转换：如果前摇是“紧握剑柄，重心下沉”，你的动态描述必须是“瞬间拔剑，身体如箭般射出，带起空气波动”。
+
+3. 运镜逻辑：单一且明确
+严禁复合运镜冲突。坚持“一镜一动”或“逻辑强关联复合”（如：推镜头的同时跟随角色跑动）。
+安全限制：除非用户要求，否则运镜幅度控制在安全区间，确保AI生成的画面连贯性（Consistency）。
+
+4. 术语标准化与解耦
+去指代词：严禁使用 "He/She/It"，必须重复主体特征（如 "The silver-haired warrior"）。
+专业词库：
+Pan/Tilt/Zoom/Truck/Pedestal/Crane/Orbit
+Speed Control: Slow motion, Fast-paced, Real-time.
+Motion Buckets: Low motion (Slight movement), High motion (Intense action).
+
+Workflow
+深度解析：分析上一环节的“画面构思”与“风格词”，确定画面的物理规则。
+动能规划：设计从静态起始点到动态终点的轨迹。
+主体动（Subject Motion）：肌肉如何收缩？衣物如何飘动？
+相机动（Camera Motion）：如何通过运镜增强视觉冲击力？
+生成指令：合成专用于 AI 视频模型的高质量英文 Prompt。
+
+**Data Source (Context):**
+Global Art Style: **${visualStyle || 'Cinematic Realism'}**
+**Reference Storyboard Data:**
+${storyboardContext ? storyboardContext.slice(0, 30000) : '⚠️ 警告：未检测到分镜表数据。'}
+
+Output Format
+请严格按照以下格式回复，严禁废话：
+
+[分镜序号]
+动态策略：(简短中文：说明如何从“前摇”过渡到“释放”，解释选择该运镜对剧集节奏的作用)
+Motion Prompt (English): (Detailed Subject Action + Dynamic Camera Movement + Fluid Physics + Style Consistency + Motion Speed)
+Video Control Args: (提取纯粹指令，包含 --motion [1-10], --camera_cmd, --pacing)
+
+Example Output (实拍风格参考)
+[分镜02]
+动态策略：承接上一镜头的蓄力，此镜头执行“释放”。角色猛然冲刺，利用低角度跟拍（Truck In）增强速度感，模拟肾上腺素飙升的节奏。
+Motion Prompt (English): The black-suited agent suddenly lunges forward into a sprint, feet slamming against the wet pavement with water splashing. Camera tracks low and moves fast (Truck In) following the agent's movement. Cinematic realistic style, motion blur, 4k, high energy burst.
+Video Control Args: --camera_cmd: Truck In, Fast Follow; --motion: 8; --pacing: Explosive.
 `
 };
 
@@ -231,6 +284,7 @@ export const generateScriptStep = async (
          'PROPS': '道具清单',
          'SCENES': '场景氛围',
          'STORYBOARD': '分镜拆解',
+         'VIDEO_PROMPTS': '视频提示词生成',
          'ARCHITECT_PHASE1': '剧情锚点提取',
          'ARCHITECT_PHASE2': '视觉 DNA 锁定',
          'ARCHITECT_PHASE3': '镜头序列展开',

@@ -20,7 +20,7 @@ export interface VideoFile {
   mimeType: string | null;
 }
 
-export type AnalysisStep = 'IDLE' | 'ROLES' | 'PROPS' | 'SCENES' | 'STORYBOARD' | 'COMPLETED' | 'SUMMARY';
+export type AnalysisStep = 'IDLE' | 'ROLES' | 'PROPS' | 'SCENES' | 'STORYBOARD' | 'VIDEO_PROMPTS' | 'COMPLETED' | 'SUMMARY';
 
 export interface StyleSuggestion {
   en: string;
