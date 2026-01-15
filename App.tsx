@@ -319,11 +319,11 @@ const App: React.FC = () => {
         ...scriptState, 
         fileName: item.title, 
         isAnalyzing: false, 
-        isChatReady: false, 
-        currentStep: 'COMPLETED',
-        stepResults: { 'FULL_REPORT': item.content }, 
+        isChatReady: true, // Allow direct access to dashboard
+        currentStep: 'SUMMARY', // Default to summary
+        stepResults: item.scriptData || { 'FULL_REPORT': item.content }, // Restore map or fallback
         error: null,
-        visualStyle: null,
+        visualStyle: item.visualStyle || null, // Restore style
         suggestedStyles: [],
         isSelectingStyle: false,
         episodeDuration: '60s',
@@ -331,6 +331,28 @@ const App: React.FC = () => {
       });
     }
     setShowHistory(false);
+  };
+
+  const saveScriptToHistory = () => {
+    if (!scriptState.fileName || Object.keys(scriptState.stepResults).length === 0) {
+        alert("暂无内容可保存");
+        return;
+    }
+    
+    // Create a summary content for the preview
+    const summary = Object.entries(scriptState.stepResults)
+      .map(([k, v]) => `## ${k}\n${v.slice(0, 200)}...`)
+      .join('\n\n');
+
+    saveToHistory({
+      type: 'script',
+      title: scriptState.fileName,
+      content: summary, // Preview content
+      scriptData: scriptState.stepResults, // Full data map
+      visualStyle: scriptState.visualStyle || undefined
+    });
+    
+    alert("已保存到历史记录 (Saved to Memory)");
   };
 
   const handleVideoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -984,7 +1006,7 @@ const App: React.FC = () => {
                                   <i className="fas fa-table text-4xl mb-4 opacity-30"></i>
                                   <p className="text-sm">等待优化结果...</p>
                                   <p className="text-xs mt-2 opacity-60">请先在“剧本拆解”中上传剧本以提供上下文。</p>
-                                </div>
+                               </div>
                             )}
                         </div>
                     </div>
@@ -1015,6 +1037,15 @@ const App: React.FC = () => {
                               {renderTabButton('PROPS', '道具拆解', 'fa-hat-wizard')}
                               <div className="my-2 border-t border-slate-100"></div>
                               {renderTabButton('SUMMARY', '汇总导出', 'fa-file-export')}
+                              <button 
+                                  onClick={saveScriptToHistory}
+                                  className="flex items-center p-3 rounded-xl transition-all w-full space-x-3 text-left bg-transparent text-slate-500 hover:bg-slate-50 hover:text-indigo-600 mt-2 border-t border-slate-100 pt-3"
+                              >
+                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm bg-slate-100">
+                                      <i className="fas fa-save"></i>
+                                  </div>
+                                  <span className="text-sm font-semibold">保存记录 (Memory)</span>
+                              </button>
                           </div>
                       </div>
                       

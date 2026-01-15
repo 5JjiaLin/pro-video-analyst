@@ -66,4 +66,6 @@ export interface HistoryItem {
   content: string; // For script, this will be the combined markdown
   metadata?: VideoMetadata;
   extractedFrames?: Record<string, string>;
+  scriptData?: Record<string, string>; // Stores individual step results for scripts
+  visualStyle?: string; // Stores the visual style used
 }
