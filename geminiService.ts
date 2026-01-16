@@ -208,24 +208,32 @@ Video Control Args: --camera_cmd: Truck In, Fast Follow; --motion: 8; --pacing: 
 `
 };
 
+// HELPER: Determine thinking budget based on model
+const getThinkingBudget = (modelName: string): number => {
+  if (modelName.includes('gemini-3-pro')) return 32768; // Max for 2.5/3 Pro
+  return 10240; // Default for others like Flash
+};
+
 export const analyzeVideo = async (
   videoBase64: string,
   mimeType: string,
   metadata: VideoMetadata,
-  onProgress: (msg: string) => void
+  onProgress: (msg: string) => void,
+  baseUrl?: string,
+  modelName: string = "gemini-3-flash-preview"
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  onProgress("视觉感知引擎深度初始化...");
-  const model = "gemini-3-flash-preview"; 
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
+  onProgress(`视觉感知引擎深度初始化 (${modelName})...`);
+  
   const videoPart = { inlineData: { data: videoBase64, mimeType: mimeType } };
   const textPart = { text: VIDEO_PROMPT_TEMPLATE(metadata) };
 
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: model,
+      model: modelName,
       contents: { parts: [videoPart, textPart] },
       config: {
-        thinkingConfig: { thinkingBudget: 10240 }
+        thinkingConfig: { thinkingBudget: getThinkingBudget(modelName) }
       }
     });
     return response.text || "AI 响应异常。";
@@ -235,16 +243,17 @@ export const analyzeVideo = async (
 };
 
 export const initializeScriptChat = async (
-  scriptContent: string
+  scriptContent: string,
+  baseUrl?: string,
+  modelName: string = "gemini-3-flash-preview"
 ): Promise<{ chat: Chat; suggestedStyles: StyleSuggestion[] }> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = "gemini-3-flash-preview"; 
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
   
   const chat = ai.chats.create({
-    model: model,
+    model: modelName,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
-      thinkingConfig: { thinkingBudget: 10240 }
+      thinkingConfig: { thinkingBudget: getThinkingBudget(modelName) }
     }
   });
 
@@ -275,7 +284,9 @@ export const generateScriptStep = async (
   context?: any,
   refinementInstruction?: string,
   visualStyle?: string,
-  storyboardContext?: string
+  storyboardContext?: string,
+  baseUrl?: string,
+  modelName: string = "gemini-3-flash-preview" // Chat object maintains its own model, but good for logs/consistency if needed
 ): Promise<string> => {
   let prompt = "";
   if (refinementInstruction) {
@@ -318,10 +329,11 @@ export const optimizeTable = async (
   tableContent: string,
   requirements: string,
   targetType: 'STORYBOARD' | 'SCENES' = 'STORYBOARD',
-  visualStyle?: string
+  visualStyle?: string,
+  baseUrl?: string,
+  modelName: string = "gemini-3-flash-preview"
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = "gemini-3-flash-preview"; 
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
   
   let prompt = "";
 
@@ -353,19 +365,19 @@ ${tableContent}
       // DEFAULT: General Storyboard Optimization
       prompt = `
 Role: 资深影视分镜师
-Task: 重构与优化用户提供的分镜表格数据。
+Task: 根据用户的【视觉风格】和【优化指令】对分镜表格进行专项润色。
 
-**🎨 优化风格参考**：**【 ${visualStyle || '默认风格'} 】**
-**用户指令 (Requirements):**
-${requirements || "请优化画面描述，补充运镜细节，使其更符合工业化分镜标准。"}
-
-**原始表格数据:**
+**核心输入:**
+1. **🎨 目标视觉风格**: **【 ${visualStyle || '保持原风格'} 】**
+2. **📝 优化指令**: **【 ${requirements || '请优化画面描述，使其更具画面感，补充运镜细节'} 】**
+3. **原始表格**:
 ${tableContent}
 
-**处理规则:**
-1. **结构保持**: 尽可能保留原表格的关键列（如场次、镜号、时间），但可以根据优化需要增加列（如：画面描述、运镜、音效）。
-2. **内容增强**: 根据用户指令和风格参考，对内容进行润色、扩充或改写。
-3. **格式输出**: 必须输出标准的 Markdown 表格。
+**执行规则:**
+1. **风格注入**: 将画面描述（Visual Description）重写，使其严格符合【目标视觉风格】的关键词（如光影、构图、色调、材质）。
+2. **指令响应**: 逐条执行用户的【优化指令】（例如：增加特写、修改台词风格等）。
+3. **结构维持**: 严格保留原表格的【场次】、【镜号】、【时间】列。只修改内容列（画面、台词、运镜等）。
+4. **格式输出**: 必须输出标准的 Markdown 表格，不要包含任何解释性文字。
 
 **Output:**
 仅输出优化后的 Markdown 表格。
@@ -374,10 +386,10 @@ ${tableContent}
 
   try {
     const response = await ai.models.generateContent({
-      model: model,
+      model: modelName,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 4096 }
+        thinkingConfig: { thinkingBudget: getThinkingBudget(modelName) }
       }
     });
     return response.text || "优化失败，请重试。";
@@ -388,16 +400,17 @@ ${tableContent}
 
 export const analyzeImageStyle = async (
   imageBase64: string,
-  mimeType: string
+  mimeType: string,
+  baseUrl?: string,
+  modelName: string = "gemini-3-flash-preview"
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = "gemini-3-flash-preview"; 
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
   const prompt = `分析此图视觉风格，输出15字以内的英文提示词。`;
   const imagePart = { inlineData: { data: imageBase64, mimeType: mimeType } };
   const textPart = { text: prompt };
   try {
     const response = await ai.models.generateContent({
-      model: model,
+      model: modelName,
       contents: { parts: [imagePart, textPart] }
     });
     return response.text?.trim() || "";

@@ -33,6 +33,12 @@ export interface FeishuConfig {
   spreadsheetToken: string;
 }
 
+export interface AppSettings {
+  geminiBaseUrl: string;
+  geminiModel: string; // NEW: Model selection (e.g., gemini-3-pro-preview)
+  feishuConfig: FeishuConfig;
+}
+
 export interface ScriptState {
   inputText: string;
   fileName: string | null;
