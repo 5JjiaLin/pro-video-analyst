@@ -316,14 +316,46 @@ export const generateScriptStep = async (
 
 export const optimizeTable = async (
   tableContent: string,
-  requirements: string
+  requirements: string,
+  targetType: 'STORYBOARD' | 'SCENES' = 'STORYBOARD',
+  visualStyle?: string
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-3-flash-preview"; 
-  const prompt = `
+  
+  let prompt = "";
+
+  if (targetType === 'SCENES') {
+      prompt = `
+Role: 资深美术指导与场景设计师
+Task: 基于用户提供的【分镜表格】进行场景拆解。
+
+**🎨 全局美术风格约束**：**【 ${visualStyle || 'Cinematic Realism'} 】**
+
+**工作流 (Workflow):**
+1. **分析表格**: 仔细阅读分镜表格，识别其中出现的所有独特场景 (Location/Set)。
+2. **映射关系**: 将每一个场景与出现该场景的“镜号 (Shot Number)”进行对应。
+3. **环境构建**: 根据全局美术风格，为每个场景生成极具画面感的空镜提示词 (Empty Set Prompt)。
+4. **输出**: 生成标准的 Markdown 场景分析表。
+
+**输入分镜数据 (Input Storyboard):**
+${tableContent}
+
+**输出格式 (Output Format):**
+### 🏰 场景美术分析表 (基于分镜映射)
+| 场景名称 | 场景基调与光影描述 | 对应分镜号与视角 (Shot Mapping) | 对应视角的空镜提示词 (Specific Angle Empty Prompt) |
+| :--- | :--- | :--- | :--- |
+| 示例场景A | (描述...) | 镜号: 1, 3, 5 (全景/正视) | (Prompt...) |
+
+**Attention**: 必须严格对应原表格中的镜号。
+`;
+  } else {
+      // DEFAULT: General Storyboard Optimization
+      prompt = `
 Role: 资深影视分镜师
 Task: 重构与优化用户提供的分镜表格数据。
 
+**🎨 优化风格参考**：**【 ${visualStyle || '默认风格'} 】**
 **用户指令 (Requirements):**
 ${requirements || "请优化画面描述，补充运镜细节，使其更符合工业化分镜标准。"}
 
@@ -332,12 +364,13 @@ ${tableContent}
 
 **处理规则:**
 1. **结构保持**: 尽可能保留原表格的关键列（如场次、镜号、时间），但可以根据优化需要增加列（如：画面描述、运镜、音效）。
-2. **内容增强**: 根据用户指令对内容进行润色、扩充或改写。
+2. **内容增强**: 根据用户指令和风格参考，对内容进行润色、扩充或改写。
 3. **格式输出**: 必须输出标准的 Markdown 表格。
 
 **Output:**
 仅输出优化后的 Markdown 表格。
 `;
+  }
 
   try {
     const response = await ai.models.generateContent({

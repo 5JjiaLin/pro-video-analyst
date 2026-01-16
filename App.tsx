@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { VideoMetadata, AnalysisState, VideoFile, ScriptState, HistoryItem, AnalysisStep, StyleSuggestion, FeishuConfig, OptimizationState } from './types';
 import { analyzeVideo, initializeScriptChat, generateScriptStep, analyzeImageStyle, optimizeTable } from './geminiService';
@@ -256,8 +255,10 @@ const App: React.FC = () => {
   });
   
   const [optState, setOptState] = useState<OptimizationState>({
+    targetType: 'STORYBOARD',
     userInput: '',
     requirements: '',
+    visualStyle: '',
     result: null,
     isOptimizing: false
   });
@@ -513,15 +514,15 @@ const App: React.FC = () => {
     }
   };
 
-  const runTableOptimization = async () => {
+  const runTableOptimization = async (type: 'STORYBOARD' | 'SCENES') => {
       if (!optState.userInput.trim()) {
           alert("请先粘贴表格内容");
           return;
       }
       
-      setOptState(s => ({...s, isOptimizing: true}));
+      setOptState(s => ({...s, isOptimizing: true, targetType: type}));
       try {
-          const result = await optimizeTable(optState.userInput, optState.requirements);
+          const result = await optimizeTable(optState.userInput, optState.requirements, type, optState.visualStyle);
           setOptState(s => ({...s, result, isOptimizing: false}));
       } catch (e: any) {
           alert("优化失败: " + e.message);
@@ -795,37 +796,71 @@ const App: React.FC = () => {
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-10">
                     {/* Left: Input */}
                     <div className="w-full lg:w-1/3 flex flex-col gap-4">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col">
-                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">原始表格数据 (支持飞书/Excel直接粘贴)</label>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col overflow-y-auto">
+                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">1. 原始表格数据 (支持飞书/Excel直接粘贴)</label>
                              <textarea 
-                                className="flex-grow w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none mb-4"
-                                placeholder="请在此处粘贴表格内容..."
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none mb-6 h-40"
+                                placeholder="请在此处粘贴分镜表格内容..."
                                 value={optState.userInput}
                                 onChange={(e) => setOptState(s => ({...s, userInput: e.target.value}))}
                              />
                              
-                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">优化需求指令</label>
+                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">2. 视觉风格参考 (Visual Style)</label>
+                             <div className="mb-6">
+                                 <div className="flex flex-wrap gap-2 mb-2">
+                                     {['Cinematic Realism', 'Cyberpunk Noir', 'Ghibli Watercolor', 'Dark Fantasy'].map(style => (
+                                         <button 
+                                            key={style}
+                                            onClick={() => setOptState(s => ({...s, visualStyle: style}))}
+                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${optState.visualStyle === style ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
+                                         >
+                                             {style}
+                                         </button>
+                                     ))}
+                                 </div>
+                                 <input 
+                                    type="text" 
+                                    placeholder="或输入自定义风格..." 
+                                    value={optState.visualStyle}
+                                    onChange={(e) => setOptState(s => ({...s, visualStyle: e.target.value}))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                 />
+                             </div>
+
+                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">3. 优化指令 (可选)</label>
                              <textarea 
-                                className="h-32 w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none"
-                                placeholder="例如：\n1. 丰富画面描述，增加赛博朋克光影细节。\n2. 补充运镜方式，多用推拉镜头。\n3. 将台词翻译成英文..."
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none h-24 mb-4"
+                                placeholder="例如：补充运镜细节..."
                                 value={optState.requirements}
                                 onChange={(e) => setOptState(s => ({...s, requirements: e.target.value}))}
                              />
                              
-                             <button 
-                                onClick={runTableOptimization}
-                                disabled={optState.isOptimizing || !optState.userInput.trim()}
-                                className="mt-4 w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                             >
-                                {optState.isOptimizing ? <><i className="fas fa-circle-notch animate-spin"></i> 优化中...</> : <><i className="fas fa-magic"></i> 开始优化</>}
-                             </button>
+                             <div className="mt-auto grid grid-cols-2 gap-3">
+                                 <button 
+                                    onClick={() => runTableOptimization('STORYBOARD')}
+                                    disabled={optState.isOptimizing || !optState.userInput.trim()}
+                                    className="py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 hover:text-indigo-600 transition-all disabled:opacity-50 text-xs flex items-center justify-center gap-2"
+                                 >
+                                    <i className="fas fa-edit"></i> 通用润色
+                                 </button>
+                                 <button 
+                                    onClick={() => runTableOptimization('SCENES')}
+                                    disabled={optState.isOptimizing || !optState.userInput.trim()}
+                                    className="py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all disabled:opacity-50 text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+                                 >
+                                    {optState.isOptimizing ? <i className="fas fa-circle-notch animate-spin"></i> : <i className="fas fa-dungeon"></i>} 
+                                    生成场景拆解
+                                 </button>
+                             </div>
                         </div>
                     </div>
 
                     {/* Right: Output */}
                     <div className="w-full lg:w-2/3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                            <span className="text-sm font-bold text-slate-700">优化结果</span>
+                            <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                {optState.targetType === 'SCENES' ? <><i className="fas fa-dungeon text-indigo-500"></i> 场景拆解结果</> : <><i className="fas fa-table text-indigo-500"></i> 优化结果</>}
+                            </span>
                             <div className="flex gap-2">
                                 {optState.result && (
                                   <>
@@ -840,9 +875,15 @@ const App: React.FC = () => {
                                <div className="markdown-content">{renderMarkdown(optState.result)}</div>
                             ) : (
                                <div className="h-full flex flex-col items-center justify-center text-slate-300">
-                                  <i className="fas fa-table text-4xl mb-4 opacity-30"></i>
-                                  <p className="text-sm">等待优化结果...</p>
-                                  <p className="text-xs mt-2 opacity-60">AI 将保留原有表格结构，仅针对内容进行升级。</p>
+                                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                                      <i className="fas fa-magic text-2xl text-slate-400"></i>
+                                  </div>
+                                  <p className="text-sm font-medium text-slate-500">等待生成结果...</p>
+                                  <p className="text-xs mt-2 opacity-60 max-w-xs text-center">
+                                      {optState.targetType === 'SCENES' 
+                                        ? "AI 将识别表格中的场景，并根据您选择的风格生成多视角的空镜提示词。" 
+                                        : "AI 将保留原有表格结构，仅针对内容进行升级润色。"}
+                                  </p>
                                </div>
                             )}
                         </div>

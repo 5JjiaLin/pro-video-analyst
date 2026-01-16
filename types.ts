@@ -52,8 +52,10 @@ export interface ScriptState {
 }
 
 export interface OptimizationState {
+  targetType: 'STORYBOARD' | 'SCENES'; // Identify what we are generating
   userInput: string;
   requirements: string;
+  visualStyle: string; // New: Selected style for optimization
   result: string | null;
   isOptimizing: boolean;
 }
