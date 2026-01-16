@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { VideoMetadata, AnalysisState, VideoFile, ScriptState, HistoryItem, AnalysisStep, StyleSuggestion, FeishuConfig, OptimizationState } from './types';
-import { analyzeVideo, initializeScriptChat, generateScriptStep, analyzeImageStyle, optimizeScriptTable } from './geminiService';
+import { analyzeVideo, initializeScriptChat, generateScriptStep, analyzeImageStyle, optimizeTable } from './geminiService';
 import { Chat } from "@google/genai";
 import * as mammoth from 'mammoth';
 
@@ -256,8 +256,8 @@ const App: React.FC = () => {
   });
   
   const [optState, setOptState] = useState<OptimizationState>({
-    targetType: 'STORYBOARD',
     userInput: '',
+    requirements: '',
     result: null,
     isOptimizing: false
   });
@@ -341,7 +341,7 @@ const App: React.FC = () => {
     
     // Create a summary content for the preview
     const summary = Object.entries(scriptState.stepResults)
-      .map(([k, v]) => `## ${k}\n${v.slice(0, 200)}...`)
+      .map(([k, v]) => `## ${k}\n${(v as string).slice(0, 200)}...`)
       .join('\n\n');
 
     saveToHistory({
@@ -435,26 +435,14 @@ const App: React.FC = () => {
       const { chat, suggestedStyles } = await initializeScriptChat(scriptState.inputText);
       scriptChatRef.current = chat;
       
-      if (activeMode === 'optimization') {
-          // Optimization Mode: Skip Style Selection
-          setScriptState(s => ({ 
-              ...s, 
-              isAnalyzing: false, 
-              isSelectingStyle: false, // SKIP SELECTION
-              suggestedStyles: [],
-              isChatReady: true, // Directly ready
-              visualStyle: null // Let AI infer
-          }));
-      } else {
-          // Script Mode: Require Style Selection
-          setScriptState(s => ({ 
-              ...s, 
-              isAnalyzing: false, 
-              isSelectingStyle: true,
-              suggestedStyles: suggestedStyles,
-              isChatReady: false 
-          }));
-      }
+      // Script Mode: Require Style Selection
+      setScriptState(s => ({ 
+          ...s, 
+          isAnalyzing: false, 
+          isSelectingStyle: true,
+          suggestedStyles: suggestedStyles,
+          isChatReady: false 
+      }));
     } catch (e: any) {
       setScriptState(s => ({ ...s, isAnalyzing: false, error: e.message, isChatReady: false }));
     }
@@ -525,29 +513,20 @@ const App: React.FC = () => {
     }
   };
 
-  const runOptimization = async () => {
-    if (!scriptChatRef.current) {
-        alert("请先在“剧本拆解”中上传剧本");
-        return;
-    }
-    if (!optState.userInput.trim()) {
-        alert("请输入或粘贴您的表格内容");
-        return;
-    }
-
-    setOptState(s => ({...s, isOptimizing: true}));
-    try {
-        const res = await optimizeScriptTable(
-            scriptChatRef.current,
-            optState.targetType,
-            optState.userInput,
-            scriptState.visualStyle // Pass potentially null style
-        );
-        setOptState(s => ({...s, result: res, isOptimizing: false}));
-    } catch (e: any) {
-        alert("优化失败: " + e.message);
-        setOptState(s => ({...s, isOptimizing: false}));
-    }
+  const runTableOptimization = async () => {
+      if (!optState.userInput.trim()) {
+          alert("请先粘贴表格内容");
+          return;
+      }
+      
+      setOptState(s => ({...s, isOptimizing: true}));
+      try {
+          const result = await optimizeTable(optState.userInput, optState.requirements);
+          setOptState(s => ({...s, result, isOptimizing: false}));
+      } catch (e: any) {
+          alert("优化失败: " + e.message);
+          setOptState(s => ({...s, isOptimizing: false}));
+      }
   };
 
   const resetScriptState = () => {
@@ -802,8 +781,76 @@ const App: React.FC = () => {
                 <div className="markdown-content max-w-5xl mx-auto">{renderMarkdown(status.report!)}</div>
              </div>
           )
+        ) : activeMode === 'optimization' ? (
+          // --- TABLE OPTIMIZATION MODE ---
+          <div className="h-[calc(100vh-140px)] animate-in fade-in">
+                <header className="mb-8 text-center">
+                     <div className="inline-flex items-center gap-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-xs font-bold uppercase tracking-wider border border-purple-100 mb-4">
+                       <span className="w-2 h-2 rounded-full bg-purple-600"></span> Script Doctor
+                     </div>
+                     <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">智能分镜优化</h2>
+                     <p className="text-slate-500 mt-2">粘贴飞书表格或粗略分镜，AI 将根据您的指令进行专业级润色与补全。</p>
+                </header>
+
+                <div className="flex flex-col lg:flex-row gap-6 h-full pb-10">
+                    {/* Left: Input */}
+                    <div className="w-full lg:w-1/3 flex flex-col gap-4">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col">
+                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">原始表格数据 (支持飞书/Excel直接粘贴)</label>
+                             <textarea 
+                                className="flex-grow w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none mb-4"
+                                placeholder="请在此处粘贴表格内容..."
+                                value={optState.userInput}
+                                onChange={(e) => setOptState(s => ({...s, userInput: e.target.value}))}
+                             />
+                             
+                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">优化需求指令</label>
+                             <textarea 
+                                className="h-32 w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none"
+                                placeholder="例如：\n1. 丰富画面描述，增加赛博朋克光影细节。\n2. 补充运镜方式，多用推拉镜头。\n3. 将台词翻译成英文..."
+                                value={optState.requirements}
+                                onChange={(e) => setOptState(s => ({...s, requirements: e.target.value}))}
+                             />
+                             
+                             <button 
+                                onClick={runTableOptimization}
+                                disabled={optState.isOptimizing || !optState.userInput.trim()}
+                                className="mt-4 w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                             >
+                                {optState.isOptimizing ? <><i className="fas fa-circle-notch animate-spin"></i> 优化中...</> : <><i className="fas fa-magic"></i> 开始优化</>}
+                             </button>
+                        </div>
+                    </div>
+
+                    {/* Right: Output */}
+                    <div className="w-full lg:w-2/3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                            <span className="text-sm font-bold text-slate-700">优化结果</span>
+                            <div className="flex gap-2">
+                                {optState.result && (
+                                  <>
+                                    <button onClick={() => setShowFeishuModal(true)} className="px-3 py-1.5 rounded-lg bg-[#00d6b9] text-white text-xs font-bold hover:bg-[#00bda3] flex items-center gap-1"><i className="fas fa-cloud-upload-alt"></i> 飞书同步</button>
+                                    <button onClick={() => {navigator.clipboard.writeText(optState.result!); alert('已复制Markdown');}} className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-xs font-bold hover:text-indigo-600"><i className="fas fa-copy"></i> 复制</button>
+                                  </>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex-grow overflow-y-auto p-6 custom-scrollbar bg-slate-50/30">
+                            {optState.result ? (
+                               <div className="markdown-content">{renderMarkdown(optState.result)}</div>
+                            ) : (
+                               <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                                  <i className="fas fa-table text-4xl mb-4 opacity-30"></i>
+                                  <p className="text-sm">等待优化结果...</p>
+                                  <p className="text-xs mt-2 opacity-60">AI 将保留原有表格结构，仅针对内容进行升级。</p>
+                               </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+          </div>
         ) : (
-          // --- SHARED SCRIPT & OPTIMIZATION CONTEXT ---
+          // --- SHARED SCRIPT CONTEXT ---
           <>
             {scriptState.isSelectingStyle ? (
              // Style Selection UI
@@ -880,19 +927,6 @@ const App: React.FC = () => {
               // Shared Upload UI with dynamic text
               <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4">
                 <header className="text-center space-y-4">
-                  {activeMode === 'optimization' ? (
-                     <>
-                        <div className="inline-flex items-center gap-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-xs font-bold uppercase tracking-wider border border-purple-100">
-                           <span className="w-2 h-2 rounded-full bg-purple-600"></span> Script Doctor
-                        </div>
-                        <h2 className="text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight">
-                          智能分镜 <span className="text-indigo-600">优化</span>
-                        </h2>
-                        <p className="text-slate-500 text-lg max-w-xl mx-auto">
-                          请先上传剧本。AI 将进行<span className="font-bold text-slate-700">“三遍以上”的深度通读</span>，建立完备的叙事索引后，为您开启专业级的分镜优化功能。
-                        </p>
-                     </>
-                  ) : (
                      <>
                         <div className="inline-flex items-center gap-2 bg-amber-50 px-3 py-1 rounded-full text-amber-700 text-xs font-bold uppercase tracking-wider border border-amber-100">
                            <span className="w-2 h-2 rounded-full bg-amber-500"></span> Script Analysis
@@ -904,7 +938,6 @@ const App: React.FC = () => {
                           上传剧本，AI 将构建智能索引，为您提供人物小传、道具清单、场景氛围及分镜脚本的模块化输出。
                         </p>
                      </>
-                  )}
                 </header>
                 <div className="bg-white p-10 rounded-[40px] shadow-xl shadow-slate-200/50 border border-slate-100 space-y-8">
                   <div className="flex gap-4">
@@ -932,86 +965,11 @@ const App: React.FC = () => {
                           <span>AI 正在深度通读剧本...</span>
                       </>
                     ) : (
-                       <><i className="fas fa-magic"></i><span>{activeMode === 'optimization' ? "建立索引并开启优化" : "建立剧本索引并开始"}</span></>
+                       <><i className="fas fa-magic"></i><span>建立剧本索引并开始</span></>
                     )}
                   </button>
                 </div>
               </div>
-            ) : activeMode === 'optimization' ? (
-              // Optimization Dashboard
-              <div className="h-[calc(100vh-140px)] animate-in fade-in">
-                <header className="mb-8 text-center">
-                     <div className="inline-flex items-center gap-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-xs font-bold uppercase tracking-wider border border-purple-100 mb-4">
-                       <span className="w-2 h-2 rounded-full bg-purple-600"></span> Script Doctor
-                     </div>
-                     <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">智能分镜优化</h2>
-                     <p className="text-slate-500 mt-2">粘贴粗略表格，AI 将结合剧本上下文自动补全细节、运镜与 Prompt。</p>
-                </header>
-
-                <div className="flex flex-col lg:flex-row gap-6 h-full">
-                    {/* Left: Input */}
-                    <div className="w-full lg:w-1/3 flex flex-col gap-4">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col">
-                             <div className="mb-4">
-                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">优化目标</label>
-                                 <div className="grid grid-cols-2 gap-2">
-                                    {['STORYBOARD', 'ROLES', 'PROPS', 'SCENES'].map(t => (
-                                        <button 
-                                          key={t}
-                                          onClick={() => setOptState(s => ({...s, targetType: t as any}))}
-                                          className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all ${optState.targetType === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-indigo-300'}`}
-                                        >
-                                          {t === 'STORYBOARD' ? '分镜表' : t === 'ROLES' ? '角色表' : t === 'PROPS' ? '道具表' : '场景表'}
-                                        </button>
-                                    ))}
-                                 </div>
-                             </div>
-                             
-                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">粗略内容 (粘贴)</label>
-                             <textarea 
-                                className="flex-grow w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none"
-                                placeholder="例如：\n1. 张三走进房间，拿起桌上的水杯。\n2. 镜头特写水杯，发现有裂痕..."
-                                value={optState.userInput}
-                                onChange={(e) => setOptState(s => ({...s, userInput: e.target.value}))}
-                             />
-                             
-                             <button 
-                                onClick={runOptimization}
-                                disabled={optState.isOptimizing}
-                                className="mt-4 w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                             >
-                                {optState.isOptimizing ? <><i className="fas fa-circle-notch animate-spin"></i> 优化中...</> : <><i className="fas fa-magic"></i> 开始优化</>}
-                             </button>
-                        </div>
-                    </div>
-
-                    {/* Right: Output */}
-                    <div className="w-full lg:w-2/3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                            <span className="text-sm font-bold text-slate-700">优化结果</span>
-                            <div className="flex gap-2">
-                                {optState.result && (
-                                  <>
-                                    <button onClick={() => setShowFeishuModal(true)} className="px-3 py-1.5 rounded-lg bg-[#00d6b9] text-white text-xs font-bold hover:bg-[#00bda3] flex items-center gap-1"><i className="fas fa-cloud-upload-alt"></i> 飞书同步</button>
-                                    <button onClick={() => {navigator.clipboard.writeText(optState.result!); alert('已复制Markdown');}} className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-xs font-bold hover:text-indigo-600"><i className="fas fa-copy"></i> 复制</button>
-                                  </>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex-grow overflow-y-auto p-6 custom-scrollbar bg-slate-50/30">
-                            {optState.result ? (
-                               <div className="markdown-content">{renderMarkdown(optState.result)}</div>
-                            ) : (
-                               <div className="h-full flex flex-col items-center justify-center text-slate-300">
-                                  <i className="fas fa-table text-4xl mb-4 opacity-30"></i>
-                                  <p className="text-sm">等待优化结果...</p>
-                                  <p className="text-xs mt-2 opacity-60">请先在“剧本拆解”中上传剧本以提供上下文。</p>
-                               </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-             </div>
             ) : (
               // Script Dashboard (Original)
               <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] animate-in zoom-in-95 duration-500">

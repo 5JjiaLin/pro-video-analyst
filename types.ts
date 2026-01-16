@@ -52,8 +52,8 @@ export interface ScriptState {
 }
 
 export interface OptimizationState {
-  targetType: 'STORYBOARD' | 'ROLES' | 'PROPS' | 'SCENES';
   userInput: string;
+  requirements: string;
   result: string | null;
   isOptimizing: boolean;
 }

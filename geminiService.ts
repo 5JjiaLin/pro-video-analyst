@@ -314,18 +314,42 @@ export const generateScriptStep = async (
   }
 };
 
-export const optimizeScriptTable = async (
-  chat: Chat,
-  tableType: string,
-  userInput: string,
-  visualStyle: string | null
+export const optimizeTable = async (
+  tableContent: string,
+  requirements: string
 ): Promise<string> => {
-  const prompt = `优化 ${tableType} 表格。参考剧本上下文，补全细节、视听衔接逻辑和 AI 绘图提示词。风格：${visualStyle || '自动分析'}。输入内容如下：\n${userInput}\n\n⚠️ 注意：严禁脑补，严禁跨越模块边界。`;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const model = "gemini-3-flash-preview"; 
+  const prompt = `
+Role: 资深影视分镜师
+Task: 重构与优化用户提供的分镜表格数据。
+
+**用户指令 (Requirements):**
+${requirements || "请优化画面描述，补充运镜细节，使其更符合工业化分镜标准。"}
+
+**原始表格数据:**
+${tableContent}
+
+**处理规则:**
+1. **结构保持**: 尽可能保留原表格的关键列（如场次、镜号、时间），但可以根据优化需要增加列（如：画面描述、运镜、音效）。
+2. **内容增强**: 根据用户指令对内容进行润色、扩充或改写。
+3. **格式输出**: 必须输出标准的 Markdown 表格。
+
+**Output:**
+仅输出优化后的 Markdown 表格。
+`;
+
   try {
-    const response = await chat.sendMessage({ message: prompt });
-    return response.text || "优化失败。";
-  } catch (e: any) {
-    throw new Error(`Optimization failed: ${e.message}`);
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+      config: {
+        thinkingConfig: { thinkingBudget: 4096 }
+      }
+    });
+    return response.text || "优化失败，请重试。";
+  } catch (error: any) {
+    throw new Error(error.message || "优化服务异常");
   }
 };
 
