@@ -109,14 +109,14 @@ const STEPS_PROMPTS: Record<string, (context?: any, visualStyle?: string, storyb
 **⚠️ 核心工作流：此模块必须严格服务于“分镜表 (Storyboard)”。**
 **🎨 全局美术风格约束**：**【 ${visualStyle || 'Cinematic Realism'} 】**
 
-请读取下方的 **【已生成分镜表数据】**。你的任务是提取每一个出现的场景（Scene），并为该场景生成“多视角空镜”提示词。
+请读取下方的 **【已生成分镜表数据】**。你的任务是提取每一个出现的场景（Scene），并为该场景生成“基础场景底图提示词”以及基于底图的“多视角空镜”提示词。
 
 **数据源 (Context):**
 ${storyboardContext ? `**[参考数据：已生成的分镜表]**\n${storyboardContext.slice(0, 20000)}` : '⚠️ 警告：未检测到分镜表数据。'}
 
 **输出格式：**
 ### 🏰 场景美术分析表 (分镜视角映射版)
-| 场景名称 | 场景基调与光影描述 | 对应分镜号与视角 (Shot Mapping) | 对应视角的空镜提示词 (Specific Angle Empty Prompt) |
+| 场景名称 | 场景基调与光影描述 | 对应分镜号与视角 (Shot Mapping) | 基础场景底图提示词 (Base Empty Plate) | 对应视角的空镜提示词 (Specific Angle Empty Prompt - Img2Img) |
 `,
   STORYBOARD: (ctx, visualStyle) => `
 **【模块调用：工业级分镜表拆解 (Advanced Shooting Script)】**
@@ -339,25 +339,29 @@ export const optimizeTable = async (
 
   if (targetType === 'SCENES') {
       prompt = `
-Role: 资深美术指导与场景设计师
+Role: 你是 Studio Architect 2.0.0 —— 全流程 AI 影视制片架构师。
+Mode: 工业化创意管家。你负责将艺术感性拆解为可量化、可追溯、可迭代的标准工程指令。
+
+**【模块调用：场景氛围与环境构建 (基于分镜表映射)】**
 Task: 基于用户提供的【分镜表格】进行场景拆解。
 
 **🎨 全局美术风格约束**：**【 ${visualStyle || 'Cinematic Realism'} 】**
 
-**工作流 (Workflow):**
-1. **分析表格**: 仔细阅读分镜表格，识别其中出现的所有独特场景 (Location/Set)。
+**核心工作流 (Workflow):**
+1. **分析表格**: 深度扫描分镜表格，提取每一个出现的场景（Scene）。
 2. **映射关系**: 将每一个场景与出现该场景的“镜号 (Shot Number)”进行对应。
-3. **环境构建**: 根据全局美术风格，为每个场景生成极具画面感的空镜提示词 (Empty Set Prompt)。
-4. **输出**: 生成标准的 Markdown 场景分析表。
+3. **环境构建**: 根据全局美术风格，首先为该场景生成一个**基础场景底图提示词 (Base Empty Plate)**，这代表了该场景的标准全景/建立镜头。
+4. **视角延展**: 针对该场景下不同的镜头视角，基于“基础底图”，生成**对应视角的空镜提示词** (作为图生图的输入)。
+5. **输出**: 生成标准的 Markdown 场景分析表。
 
 **输入分镜数据 (Input Storyboard):**
 ${tableContent}
 
 **输出格式 (Output Format):**
-### 🏰 场景美术分析表 (基于分镜映射)
-| 场景名称 | 场景基调与光影描述 | 对应分镜号与视角 (Shot Mapping) | 对应视角的空镜提示词 (Specific Angle Empty Prompt) |
-| :--- | :--- | :--- | :--- |
-| 示例场景A | (描述...) | 镜号: 1, 3, 5 (全景/正视) | (Prompt...) |
+### 🏰 场景美术分析表 (分镜视角映射版)
+| 场景名称 | 场景基调与光影描述 | 对应分镜号与视角 (Shot Mapping) | 基础场景底图提示词 (Base Empty Plate) | 对应视角的空镜提示词 (Specific Angle Empty Prompt - Img2Img) |
+| :--- | :--- | :--- | :--- | :--- |
+| 示例场景A | (描述...) | 镜号: 1 (全景), 3 (特写) | (标准全景 Prompt...) | 镜号1: (同Base); 镜号3: (Close-up detail of Base...) |
 
 **Attention**: 必须严格对应原表格中的镜号。
 `;
