@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { VideoMetadata, AnalysisState, VideoFile, ScriptState, HistoryItem, AnalysisStep, StyleSuggestion, FeishuConfig, OptimizationState } from './types';
 import { analyzeVideo, initializeScriptChat, generateScriptStep, analyzeImageStyle, optimizeTable } from './geminiService';
@@ -236,6 +237,7 @@ const App: React.FC = () => {
   const [metadata, setMetadata] = useState<VideoMetadata>({ title: '', source: '', purpose: '', targetAudience: '' });
   const [video, setVideo] = useState<VideoFile>({ file: null, previewUrl: null, base64: null, mimeType: null });
   const [status, setStatus] = useState<AnalysisState>({ isAnalyzing: false, progressMessage: '', report: null, error: null });
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-3-flash-preview");
   
   const [scriptState, setScriptState] = useState<ScriptState>({ 
     inputText: '', 
@@ -386,7 +388,7 @@ const App: React.FC = () => {
   const runVideoAnalysis = async () => {
     setStatus({ isAnalyzing: true, progressMessage: LOADING_MESSAGES[0], report: null, error: null });
     try {
-      const result = await analyzeVideo(video.base64!, video.mimeType!, metadata, msg => setStatus(s => ({ ...s, progressMessage: msg })));
+      const result = await analyzeVideo(video.base64!, video.mimeType!, metadata, msg => setStatus(s => ({ ...s, progressMessage: msg })), undefined, selectedModel);
       const times = Array.from(new Set(result.match(/\d{1,2}:\d{1,2}(?::\d{1,2})?\s*-\s*\d{1,2}:\d{1,2}(?::\d{1,2})?/g) || []));
       const frames: Record<string, string> = {};
       for (const t of times) {
@@ -433,7 +435,7 @@ const App: React.FC = () => {
     
     try {
       // Receive suggested styles
-      const { chat, suggestedStyles } = await initializeScriptChat(scriptState.inputText);
+      const { chat, suggestedStyles } = await initializeScriptChat(scriptState.inputText, undefined, selectedModel);
       scriptChatRef.current = chat;
       
       // Script Mode: Require Style Selection
@@ -469,7 +471,7 @@ const App: React.FC = () => {
           reader.onloadend = async () => {
               const base64 = (reader.result as string).split(',')[1];
               const mimeType = file.type;
-              const styleDesc = await analyzeImageStyle(base64, mimeType);
+              const styleDesc = await analyzeImageStyle(base64, mimeType, undefined, selectedModel);
               setCustomStyle(styleDesc);
               setIsAnalyzingStyle(false);
           };
@@ -500,7 +502,9 @@ const App: React.FC = () => {
           }, 
           instruction, 
           scriptState.visualStyle || undefined,
-          storyboardResult
+          storyboardResult,
+          undefined,
+          selectedModel
       );
       
       setScriptState(s => ({ 
@@ -522,7 +526,7 @@ const App: React.FC = () => {
       
       setOptState(s => ({...s, isOptimizing: true, targetType: type}));
       try {
-          const result = await optimizeTable(optState.userInput, optState.requirements, type, optState.visualStyle);
+          const result = await optimizeTable(optState.userInput, optState.requirements, type, optState.visualStyle, undefined, selectedModel);
           setOptState(s => ({...s, result, isOptimizing: false}));
       } catch (e: any) {
           alert("优化失败: " + e.message);
@@ -699,11 +703,43 @@ const App: React.FC = () => {
             <button onClick={() => {setActiveMode('optimization');}} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeMode === 'optimization' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>分镜优化</button>
           </div>
         </div>
-        <div>
-          <button onClick={() => setShowHistory(!showHistory)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-slate-50">
-            <i className="fas fa-history text-sm"></i>
-            <span className="text-xs font-semibold">历史记录</span>
-          </button>
+        <div className="flex items-center gap-4">
+            {/* Model Selector */}
+            <div className="relative group z-50">
+                <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600 transition-colors">
+                    <i className="fas fa-microchip text-indigo-500"></i>
+                    <span>{selectedModel.includes('flash') ? 'Gemini 3 Flash' : 'Gemini 3 Pro'}</span>
+                    <i className="fas fa-chevron-down text-[10px] opacity-50"></i>
+                </button>
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden hidden group-hover:block animate-in fade-in slide-in-from-top-2">
+                    <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Model</div>
+                    <button 
+                        onClick={() => setSelectedModel("gemini-3-flash-preview")}
+                        className={`w-full text-left px-4 py-3 text-xs font-bold flex items-center justify-between hover:bg-indigo-50 transition-colors ${selectedModel.includes('flash') ? 'text-indigo-600 bg-indigo-50/50' : 'text-slate-600'}`}
+                    >
+                        <div className="flex flex-col">
+                            <span className="text-sm">Gemini 3 Flash</span>
+                            <span className="text-[10px] font-normal opacity-70">Fast, Efficient (Default)</span>
+                        </div>
+                        {selectedModel.includes('flash') && <i className="fas fa-check text-indigo-600"></i>}
+                    </button>
+                    <button 
+                        onClick={() => setSelectedModel("gemini-3-pro-preview")}
+                        className={`w-full text-left px-4 py-3 text-xs font-bold flex items-center justify-between hover:bg-indigo-50 transition-colors ${selectedModel.includes('pro') ? 'text-indigo-600 bg-indigo-50/50' : 'text-slate-600'}`}
+                    >
+                        <div className="flex flex-col">
+                            <span className="text-sm">Gemini 3 Pro</span>
+                            <span className="text-[10px] font-normal opacity-70">Complex Reasoning, High Quality</span>
+                        </div>
+                        {selectedModel.includes('pro') && <i className="fas fa-check text-indigo-600"></i>}
+                    </button>
+                </div>
+            </div>
+
+            <button onClick={() => setShowHistory(!showHistory)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors px-3 py-2 rounded-lg hover:bg-slate-50">
+                <i className="fas fa-history text-sm"></i>
+                <span className="text-xs font-semibold">历史记录</span>
+            </button>
         </div>
       </nav>
 
