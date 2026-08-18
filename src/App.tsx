@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { VideoMetadata, AnalysisState, VideoFile, ScriptState, HistoryItem, AnalysisStep, StyleSuggestion, FeishuConfig, OptimizationState } from './types';
+import { AiRuntimeConfig, VideoMetadata, AnalysisState, VideoFile, ScriptState, HistoryItem, AnalysisStep, StyleSuggestion, OptimizationState } from './types';
 import { analyzeVideo, initializeScriptChat, generateScriptStep, analyzeImageStyle, optimizeTable } from './geminiService';
 import { Chat } from "@google/genai";
 import * as mammoth from 'mammoth';
@@ -150,94 +150,14 @@ const ShotTable: React.FC<{
   );
 };
 
-// --- Feishu Sync Modal ---
-const FeishuSyncModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  config: FeishuConfig | undefined;
-  onSave: (cfg: FeishuConfig) => void;
-  onSync: () => void;
-  isSyncing: boolean;
-}> = ({ isOpen, onClose, config, onSave, onSync, isSyncing }) => {
-  const [localConfig, setLocalConfig] = useState<FeishuConfig>({ appId: '', appSecret: '', spreadsheetToken: '' });
-
-  useEffect(() => {
-    if (config) setLocalConfig(config);
-    else {
-        const saved = localStorage.getItem('feishu_config');
-        if (saved) setLocalConfig(JSON.parse(saved));
-    }
-  }, [config, isOpen]);
-
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      let token = val;
-      // Try to extract token from URL if pasted full URL
-      // Matches spreadsheet token (shtcn...)
-      const match = val.match(/(?:shtcn)[a-zA-Z0-9]{10,}/);
-      if (match) {
-          token = match[0];
-      }
-      setLocalConfig({...localConfig, spreadsheetToken: token});
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-            <span className="w-6 h-6 rounded bg-[#00d6b9] text-white flex items-center justify-center text-xs"><i className="fas fa-link"></i></span>
-            飞书表格同步 (Beta)
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><i className="fas fa-times"></i></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="bg-blue-50 text-blue-700 text-xs p-3 rounded-lg leading-relaxed">
-            <i className="fas fa-info-circle mr-1"></i>
-            <strong>API 同步仅支持飞书电子表格(Spreadsheet)</strong>。<br/>
-            如果您使用的是 Wiki 文档，建议使用主界面的 <strong>“复制为飞书文档格式”</strong> 按钮，直接粘贴效果最佳。
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">飞书应用 ID (App ID)</label>
-            <input type="text" value={localConfig.appId} onChange={e => setLocalConfig({...localConfig, appId: e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#00d6b9]/20 outline-none" placeholder="以 cli_ 开头..." />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">飞书应用密钥 (App Secret)</label>
-            <input type="password" value={localConfig.appSecret} onChange={e => setLocalConfig({...localConfig, appSecret: e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#00d6b9]/20 outline-none" placeholder="查看飞书开放平台..." />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">多维表格链接或 Token (Spreadsheet Token)</label>
-            <input type="text" value={localConfig.spreadsheetToken} onChange={handleUrlChange} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#00d6b9]/20 outline-none" placeholder="粘贴飞书多维表格的完整链接或 shtcn..." />
-            <p className="text-[10px] text-slate-400 mt-1">自动识别链接中的 shtcn... Token</p>
-          </div>
-        </div>
-        <div className="px-6 py-4 bg-slate-50 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-slate-500 text-sm font-bold hover:bg-slate-200 rounded-lg transition-colors">取消</button>
-          <button 
-            onClick={() => {
-                localStorage.setItem('feishu_config', JSON.stringify(localConfig));
-                onSave(localConfig);
-                onSync();
-            }} 
-            disabled={isSyncing || !localConfig.appId}
-            className="px-6 py-2 bg-[#00d6b9] text-white text-sm font-bold rounded-lg hover:bg-[#00bda3] transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
-          >
-            {isSyncing ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> 同步中...</> : <><i className="fas fa-cloud-upload-alt"></i> 开始同步</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const App: React.FC = () => {
   const [activeMode, setActiveMode] = useState<'video' | 'script' | 'optimization'>('video');
   const [metadata, setMetadata] = useState<VideoMetadata>({ title: '', source: '', purpose: '', targetAudience: '' });
   const [video, setVideo] = useState<VideoFile>({ file: null, previewUrl: null, base64: null, mimeType: null });
   const [status, setStatus] = useState<AnalysisState>({ isAnalyzing: false, progressMessage: '', report: null, error: null });
   const [selectedModel, setSelectedModel] = useState<string>("gemini-3-flash-preview");
+  const [apiKey, setApiKey] = useState('');
+  const runtimeConfig: AiRuntimeConfig = { apiKey, modelName: selectedModel };
   
   const [scriptState, setScriptState] = useState<ScriptState>({ 
     inputText: '', 
@@ -274,10 +194,6 @@ const App: React.FC = () => {
   // Style Analysis State
   const [isAnalyzingStyle, setIsAnalyzingStyle] = useState(false);
   
-  // Feishu Logic State
-  const [showFeishuModal, setShowFeishuModal] = useState(false);
-  const [isSyncingFeishu, setIsSyncingFeishu] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const styleImageInputRef = useRef<HTMLInputElement>(null);
   const scriptInputRef = useRef<HTMLInputElement>(null);
@@ -388,7 +304,7 @@ const App: React.FC = () => {
   const runVideoAnalysis = async () => {
     setStatus({ isAnalyzing: true, progressMessage: LOADING_MESSAGES[0], report: null, error: null });
     try {
-      const result = await analyzeVideo(video.base64!, video.mimeType!, metadata, msg => setStatus(s => ({ ...s, progressMessage: msg })), undefined, selectedModel);
+      const result = await analyzeVideo(video.base64!, video.mimeType!, metadata, msg => setStatus(s => ({ ...s, progressMessage: msg })), runtimeConfig);
       const times = Array.from(new Set(result.match(/\d{1,2}:\d{1,2}(?::\d{1,2})?\s*-\s*\d{1,2}:\d{1,2}(?::\d{1,2})?/g) || []));
       const frames: Record<string, string> = {};
       for (const t of times) {
@@ -435,7 +351,7 @@ const App: React.FC = () => {
     
     try {
       // Receive suggested styles
-      const { chat, suggestedStyles } = await initializeScriptChat(scriptState.inputText, undefined, selectedModel);
+      const { chat, suggestedStyles } = await initializeScriptChat(scriptState.inputText, runtimeConfig);
       scriptChatRef.current = chat;
       
       // Script Mode: Require Style Selection
@@ -471,7 +387,7 @@ const App: React.FC = () => {
           reader.onloadend = async () => {
               const base64 = (reader.result as string).split(',')[1];
               const mimeType = file.type;
-              const styleDesc = await analyzeImageStyle(base64, mimeType, undefined, selectedModel);
+              const styleDesc = await analyzeImageStyle(base64, mimeType, runtimeConfig);
               setCustomStyle(styleDesc);
               setIsAnalyzingStyle(false);
           };
@@ -502,9 +418,7 @@ const App: React.FC = () => {
           }, 
           instruction, 
           scriptState.visualStyle || undefined,
-          storyboardResult,
-          undefined,
-          selectedModel
+          storyboardResult
       );
       
       setScriptState(s => ({ 
@@ -526,7 +440,7 @@ const App: React.FC = () => {
       
       setOptState(s => ({...s, isOptimizing: true, targetType: type}));
       try {
-          const result = await optimizeTable(optState.userInput, optState.requirements, type, optState.visualStyle, undefined, selectedModel);
+          const result = await optimizeTable(optState.userInput, optState.requirements, type, optState.visualStyle, runtimeConfig);
           setOptState(s => ({...s, result, isOptimizing: false}));
       } catch (e: any) {
           alert("优化失败: " + e.message);
@@ -554,31 +468,6 @@ const App: React.FC = () => {
       setCustomStyle('');
       scriptChatRef.current = null;
   }
-
-  // --- FEATURE: Sync to Feishu (Experimental) ---
-  const handleFeishuSync = async () => {
-      const cfg = scriptState.feishuConfig || JSON.parse(localStorage.getItem('feishu_config') || '{}');
-      if (!cfg.appId || !cfg.appSecret || !cfg.spreadsheetToken) {
-          alert("请完善飞书配置");
-          return;
-      }
-
-      setIsSyncingFeishu(true);
-      try {
-          const tokenRes = await fetch('/api/feishu-proxy/auth', { 
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ "app_id": cfg.appId, "app_secret": cfg.appSecret })
-          }).catch(() => null);
-
-          await new Promise(r => setTimeout(r, 1500));
-          throw new Error("浏览器安全策略限制：无法直接从前端访问飞书 API。\n\n解决方案：\n1. 请使用「导出 Excel」功能，然后导入飞书。\n2. 若您有后端代理，请配置代理地址。\n3. 如果是 Wiki 文档，请直接使用“复制为飞书文档格式”按钮粘贴。");
-
-      } catch (e: any) {
-          alert(e.message || "同步失败");
-          setIsSyncingFeishu(false);
-      }
-  };
 
   const handleCopyFullReport = async () => {
     // UPDATED: Include VIDEO_PROMPTS
@@ -681,15 +570,6 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 relative overflow-x-hidden font-sans">
       <video ref={hiddenVideoRef} className="hidden" muted playsInline />
       
-      <FeishuSyncModal 
-        isOpen={showFeishuModal} 
-        onClose={() => setShowFeishuModal(false)}
-        config={scriptState.feishuConfig}
-        onSave={(cfg) => setScriptState(s => ({...s, feishuConfig: cfg}))}
-        onSync={handleFeishuSync}
-        isSyncing={isSyncingFeishu}
-      />
-
       {/* Navigation */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 px-6 lg:px-12 h-16 flex items-center justify-between shadow-sm/50 backdrop-blur-md bg-white/90">
         <div className="flex items-center gap-8">
@@ -704,6 +584,18 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg border border-slate-200 bg-white" title="Key 只保存在当前页面内存，刷新后清除">
+                <i className="fas fa-key text-amber-500 text-xs"></i>
+                <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(event) => setApiKey(event.target.value)}
+                    placeholder="Session Gemini API Key"
+                    autoComplete="off"
+                    className="w-24 sm:w-48 text-xs outline-none bg-transparent text-slate-700 placeholder:text-slate-400"
+                    aria-label="Session Gemini API Key"
+                />
+            </label>
             {/* Model Selector */}
             <div className="relative group z-50">
                 <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600 transition-colors">
@@ -900,7 +792,6 @@ const App: React.FC = () => {
                             <div className="flex gap-2">
                                 {optState.result && (
                                   <>
-                                    <button onClick={() => setShowFeishuModal(true)} className="px-3 py-1.5 rounded-lg bg-[#00d6b9] text-white text-xs font-bold hover:bg-[#00bda3] flex items-center gap-1"><i className="fas fa-cloud-upload-alt"></i> 飞书同步</button>
                                     <button onClick={() => {navigator.clipboard.writeText(optState.result!); alert('已复制Markdown');}} className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-xs font-bold hover:text-indigo-600"><i className="fas fa-copy"></i> 复制</button>
                                   </>
                                 )}
@@ -1183,9 +1074,6 @@ const App: React.FC = () => {
                           <div className="flex gap-3">
                                {scriptState.currentStep === 'SUMMARY' ? (
                                   <>
-                                      <button onClick={() => setShowFeishuModal(true)} className="px-4 py-2 rounded-lg bg-[#00d6b9] text-white text-xs font-bold hover:bg-[#00bda3] shadow-md transition-all flex items-center gap-2">
-                                          <i className="fas fa-cloud-upload-alt"></i> 飞书同步(Beta)
-                                      </button>
                                       <button onClick={handleCopyFullReport} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
                                           <i className="fas fa-copy"></i> 复制为飞书文档格式 (HTML)
                                       </button>
