@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse, Chat } from "@google/genai";
-import { VideoMetadata, AnalysisStep, StyleSuggestion } from "./types";
+import { AiRuntimeConfig, VideoMetadata, AnalysisStep, StyleSuggestion } from "./types";
 
 const VIDEO_PROMPT_TEMPLATE = (metadata: VideoMetadata) => `
 你是一名世界顶级的电影剪辑师与视觉拉片专家。你的任务是对上传的视频进行“全镜头、无遗漏”的深度拆解。
@@ -214,15 +214,26 @@ const getThinkingBudget = (modelName: string): number => {
   return 10240; // Default for others like Flash
 };
 
+export const validateAiRuntimeConfig = (config: AiRuntimeConfig): AiRuntimeConfig => {
+  const apiKey = config.apiKey.trim();
+  if (!apiKey) throw new Error('请先输入本次会话使用的 Gemini API Key。');
+  return { ...config, apiKey };
+};
+
+const getAiClient = (runtimeConfig: AiRuntimeConfig) => {
+  const config = validateAiRuntimeConfig(runtimeConfig);
+  return new GoogleGenAI({ apiKey: config.apiKey, baseUrl: config.baseUrl } as any);
+};
+
 export const analyzeVideo = async (
   videoBase64: string,
   mimeType: string,
   metadata: VideoMetadata,
   onProgress: (msg: string) => void,
-  baseUrl?: string,
-  modelName: string = "gemini-3-flash-preview"
+  runtimeConfig: AiRuntimeConfig
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
+  const { modelName } = validateAiRuntimeConfig(runtimeConfig);
+  const ai = getAiClient(runtimeConfig);
   onProgress(`视觉感知引擎深度初始化 (${modelName})...`);
   
   const videoPart = { inlineData: { data: videoBase64, mimeType: mimeType } };
@@ -244,10 +255,10 @@ export const analyzeVideo = async (
 
 export const initializeScriptChat = async (
   scriptContent: string,
-  baseUrl?: string,
-  modelName: string = "gemini-3-flash-preview"
+  runtimeConfig: AiRuntimeConfig
 ): Promise<{ chat: Chat; suggestedStyles: StyleSuggestion[] }> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
+  const { modelName } = validateAiRuntimeConfig(runtimeConfig);
+  const ai = getAiClient(runtimeConfig);
   
   const chat = ai.chats.create({
     model: modelName,
@@ -284,9 +295,7 @@ export const generateScriptStep = async (
   context?: any,
   refinementInstruction?: string,
   visualStyle?: string,
-  storyboardContext?: string,
-  baseUrl?: string,
-  modelName: string = "gemini-3-flash-preview" // Chat object maintains its own model, but good for logs/consistency if needed
+  storyboardContext?: string
 ): Promise<string> => {
   let prompt = "";
   if (refinementInstruction) {
@@ -330,10 +339,10 @@ export const optimizeTable = async (
   requirements: string,
   targetType: 'STORYBOARD' | 'SCENES' = 'STORYBOARD',
   visualStyle?: string,
-  baseUrl?: string,
-  modelName: string = "gemini-3-flash-preview"
+  runtimeConfig: AiRuntimeConfig
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
+  const { modelName } = validateAiRuntimeConfig(runtimeConfig);
+  const ai = getAiClient(runtimeConfig);
   
   let prompt = "";
 
@@ -405,10 +414,10 @@ ${tableContent}
 export const analyzeImageStyle = async (
   imageBase64: string,
   mimeType: string,
-  baseUrl?: string,
-  modelName: string = "gemini-3-flash-preview"
+  runtimeConfig: AiRuntimeConfig
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, baseUrl } as any);
+  const { modelName } = validateAiRuntimeConfig(runtimeConfig);
+  const ai = getAiClient(runtimeConfig);
   const prompt = `分析此图视觉风格，输出15字以内的英文提示词。`;
   const imagePart = { inlineData: { data: imageBase64, mimeType: mimeType } };
   const textPart = { text: prompt };

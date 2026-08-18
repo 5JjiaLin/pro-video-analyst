@@ -27,16 +27,10 @@ export interface StyleSuggestion {
   zh: string;
 }
 
-export interface FeishuConfig {
-  appId: string;
-  appSecret: string;
-  spreadsheetToken: string;
-}
-
-export interface AppSettings {
-  geminiBaseUrl: string;
-  geminiModel: string; // NEW: Model selection (e.g., gemini-3-pro-preview)
-  feishuConfig: FeishuConfig;
+export interface AiRuntimeConfig {
+  apiKey: string;
+  modelName: string;
+  baseUrl?: string;
 }
 
 export interface ScriptState {
@@ -54,7 +48,6 @@ export interface ScriptState {
   visualStyle: string | null; // Stores the finalized visual art style
   suggestedStyles: StyleSuggestion[]; // NEW: List of AI-recommended styles with EN/ZH
   isSelectingStyle: boolean; // NEW: UI state for showing the selection modal
-  feishuConfig?: FeishuConfig; // NEW: Stores user's API credentials
 }
 
 export interface OptimizationState {
